@@ -5,7 +5,7 @@ import random
 
 
 class ClusterMap(PlotUtils):
-    def __init__(self, dataset, label_bar, only_significant, group, subgroups):
+    def __init__(self, dataset, label_bar, only_significant, group, subgroups, color, center, vmin, vmax, font_scale ):
         self.dataset = dataset
         self.label_bar = label_bar
         self.only_significant = only_significant
@@ -13,7 +13,7 @@ class ClusterMap(PlotUtils):
         self.subgroups = subgroups
 
         self._prepare_df()
-        self._plot()
+        self._plot(color, center, vmin, vmax, font_scale )
 
     def _prepare_df(self):
         df = self.dataset.mat.loc[:, (self.dataset.mat != 0).any(axis=0)]
@@ -44,8 +44,9 @@ class ClusterMap(PlotUtils):
             :, (self.dataset.mat != 0).any(axis=0)
         ].transpose()
 
-    def _plot(self):
-        fig = sns.clustermap(self.prepared_df, col_colors=self.label_bar)
+    def _plot(self, color, center, vmin, vmax, font_scale):
+        sns.set(font_scale=font_scale)
+        fig = sns.clustermap(self.prepared_df, col_colors=self.label_bar, cmap=color, center=center, vmin=vmin, vmax=vmin) #edit settings
 
         if self.label_bar is not None:
             fig = self._add_label_bar(fig)

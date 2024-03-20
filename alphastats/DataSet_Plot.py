@@ -295,6 +295,12 @@ class Plot:
         only_significant: bool = False,
         group: str = None,
         subgroups: list = None,
+        color: str = None,
+        center: str = None,
+        vmin: int = None,
+        vmax: int = None,
+        font_scale: str = 1,
+
     ):
         """Plot a matrix dataset as a hierarchically-clustered heatmap
 
@@ -314,6 +320,11 @@ class Plot:
             only_significant=only_significant,
             group=group,
             subgroups=subgroups,
+            color=color,
+            center=center,
+            vmin=vmin,
+            vmax=vmax,
+            font_scale=font_scale
         )
         return clustermap.plot
 

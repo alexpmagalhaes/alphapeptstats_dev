@@ -1,8 +1,10 @@
 from random import random
 import pandas as pd
-import sklearn
+#import sklearn
 import logging
 import numpy as np
+from sklearnex import patch_sklearn
+patch_sklearn()
 import sklearn.ensemble
 import sklearn.impute
 from alphastats.utils import ignore_warning
@@ -96,7 +98,7 @@ class Preprocess:
 
     @ignore_warning(RuntimeWarning)
     @ignore_warning(UserWarning)
-    def _imputation(self, method: str):
+    def _imputation(self, method: str, threads: int):
         # remove ProteinGroups with only NA before
         protein_group_na = self.mat.columns[self.mat.isna().all()].tolist()
 
@@ -127,7 +129,7 @@ class Preprocess:
                 max_depth=10,
                 bootstrap=True,
                 max_samples=0.5,
-                n_jobs=2,
+                n_jobs=threads,
                 random_state=0,
                 verbose=0,  #  random forest takes a while print progress
             )
@@ -255,6 +257,7 @@ class Preprocess:
         normalization: str=None,
         imputation: str=None,
         remove_samples: list=None,
+        threads: int=2,
     ):
         """Preprocess Protein data
 
@@ -319,7 +322,7 @@ class Preprocess:
             self.mat = self.mat.replace([np.inf, -np.inf], np.nan)
             
         if imputation is not None:
-            self._imputation(method=imputation)
+            self._imputation(method=imputation, threads=threads)
 
         self.mat = self.mat.loc[:, (self.mat != 0).any(axis=0)]
         self.preprocessed = True

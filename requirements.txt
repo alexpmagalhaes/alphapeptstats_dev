@@ -4,7 +4,7 @@ data_cache>=0.1.6
 plotly==5.16.1
 statsmodels==0.14.0
 sklearn_pandas==2.2.0
-pingouin==0.5.3
+pingouin==0.5.4
 scipy==1.12.0
 tqdm>=4.64.0
 diffxpy==0.7.4
