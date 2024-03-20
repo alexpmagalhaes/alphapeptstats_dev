@@ -423,7 +423,7 @@ class TestMaxQuantDataSet(BaseTestDataSet.BaseTest):
 
     def test_plot_pca_circles(self):
         pca_plot = self.obj.plot_pca(group=self.comparison_column, circle=True)
-        # are there 5 circles drawn - for each group
+        # are there 5 circles test_preprocess_imputation_randomforest_values - for each group
         number_of_groups = len(pca_plot.to_plotly_json().get("layout").get("shapes"))
         self.assertEqual(number_of_groups, 5)
 
