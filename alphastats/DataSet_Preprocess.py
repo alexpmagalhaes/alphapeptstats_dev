@@ -1,16 +1,14 @@
 from random import random
 import pandas as pd
-#import sklearn
+import sklearn
 import logging
 import numpy as np
-from sklearnex import patch_sklearn
-patch_sklearn()
 import sklearn.ensemble
 import sklearn.impute
 from alphastats.utils import ignore_warning
 from sklearn.experimental import enable_iterative_imputer
 import itertools
-
+from fancyimpute import KNN, NuclearNormMinimization, SoftImpute, BiScaler, IterativeSVD
 
 
 class Preprocess:
@@ -145,11 +143,30 @@ class Preprocess:
             imputation_array = imp.fit_transform(array_int)
             imputation_array = imputation_array / 1000000
 
+        elif method == "svd":
+            # change for tex
+            method = "Singular value thresholding SVD"
+            imp = SoftImpute()
+            imputation_array = imp.fit_transform(self.mat.values)
+
+        elif method == "isvd":
+            # change for tex
+            method = "IterativeSVD"
+            imp = IterativeSVD(rank=3)
+            imputation_array = imp.fit_transform(self.mat.values)
+
+        elif method == "knn3":
+            # change for text
+            method = "k-Nearest Neighbor with 3 neighbors"
+            imp = sklearn.impute.KNNImputer(n_neighbors=3, weights="uniform")
+            imputation_array = imp.fit_transform(self.mat.values)
+
         else:
             raise ValueError(
                 "Imputation method: {method} is invalid."
-                "Choose 'mean'. 'median', 'knn' (for k-nearest Neighbors) or "
-                "'randomforest' for random forest imputation."
+                "Choose 'mean'. 'median', 'knn' (for k-nearest Neighbors) , 'knn3' (for k-nearest 3 Neighbors)"
+                "'svd' (Singular value thresholding), 'isvd (for IterativeSVD), or"
+                "'randomforest' for random forest imputation"
             )
 
         self.mat = pd.DataFrame(
@@ -200,7 +217,7 @@ class Preprocess:
     @ignore_warning(RuntimeWarning)
     def _compare_preprocessing_modes(self, func, params_for_func) -> list:
         dataset = self
-        imputation_methods = ["mean", "median", "knn", "randomforest"]
+        imputation_methods = ["mean", "median", "knn", "knn3", "svd", "isvd"]
         normalization_methods = ["vst","zscore", "quantile" ]
         
         preprocessing_modes = list(itertools.product(normalization_methods, imputation_methods))
@@ -282,12 +299,16 @@ class Preprocess:
 
         Imputation:
 
-        "mean", "median", "knn" or "randomforest"
+        "mean", "median", "knn", "knn3", "svd", "isvd" or "randomforest"
         For more information visit:
 
         SimpleImputer: https://scikit-learn.org/stable/modules/generated/sklearn.impute.SimpleImputer.html
 
         k-Nearest Neighbors Imputation: https://scikit-learn.org/stable/modules/impute.html#impute
+
+        Matrix completion by iterative soft thresholding of SVD decompositions. : http://web.stanford.edu/~hastie/Papers/mazumder10a.pdf
+
+        Matrix completion by iterative low-rank SVD decomposition: http://www.ncbi.nlm.nih.gov/pubmed/11395428
 
         Random Forest Imputation: https://scikit-learn.org/stable/auto_examples/impute/plot_iterative_imputer_variants_comparison.html
         https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html#sklearn.ensemble.RandomForestRegressor
@@ -298,7 +319,7 @@ class Preprocess:
             normalization (str, optional): method to normalize data: either "zscore", "quantile", "linear". Defaults to None.
             data_completeness (float, optional): data completeness across all samples between 0-1. Defaults to 0.
             remove_samples (list, optional): list with sample ids to remove. Defaults to None.
-            imputation (str, optional):  method to impute data: either "mean", "median", "knn" or "randomforest". Defaults to None.
+            imputation (str, optional):  method to impute data: either "mean", "median", "knn", "knn3", "svd", "isvd" or "randomforest". Defaults to None.
             subset (bool, optional): filter matrix so only samples that are described in metadata found in matrix. Defaults to False.
         """
         if remove_contaminations:
