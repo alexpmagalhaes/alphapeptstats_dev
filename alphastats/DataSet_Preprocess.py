@@ -83,7 +83,7 @@ class Preprocess:
             logging.info("Contaminatons have already been filtered.")
             return
 
-        #print column names with contamination
+        #  print column names with contamination
         protein_groups_to_remove = self.rawinput[
             self.rawinput[self.filter_columns].any(axis=1)
         ][self.index_column].tolist()
@@ -245,7 +245,6 @@ class Preprocess:
             itertools.product(normalization_methods, imputation_methods)
         )
 
-
         results_list = []
 
         del params_for_func["compare_preprocessing_modes"]
@@ -283,7 +282,6 @@ class Preprocess:
         Args:
             batch (str): column name in the metadata describing the different batches
         """
-        import combat
         from combat.pycombat import pycombat
 
         data = self.mat.transpose()
@@ -358,7 +356,6 @@ class Preprocess:
 
         if subset:
             self.mat = self._subset()
-        
 
         if data_completeness > 0:
             self._remove_na_values(cut_off=data_completeness)
