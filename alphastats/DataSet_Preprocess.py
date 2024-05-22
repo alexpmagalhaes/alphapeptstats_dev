@@ -293,14 +293,13 @@ class Preprocess:
     @ignore_warning(RuntimeWarning)
     def preprocess(
         self,
-        log2_transform: bool=True,
-        remove_contaminations: bool=False,
-        subset: bool=False,
-        data_completeness: float=0,
-        normalization: str=None,
-        imputation: str=None,
-        remove_samples: list=None,
-        threads: int=2,
+        log2_transform: bool  = True,
+        remove_contaminations: bool = False,
+        subset: bool = False,
+        data_completeness: float = 0,
+        normalization: str = None,
+        imputation: str = None,
+        remove_samples: list = None
     ):
         """Preprocess Protein data
 
