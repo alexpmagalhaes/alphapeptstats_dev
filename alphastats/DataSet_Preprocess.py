@@ -368,7 +368,7 @@ class Preprocess:
             self.mat = self.mat.replace([np.inf, -np.inf], np.nan)
 
         if imputation is not None:
-            self._imputation(method=imputation, threads=threads)
+            self._imputation(method=imputation)
 
         self.mat = self.mat.loc[:, (self.mat != 0).any(axis=0)]
         self.preprocessing_info.update(
