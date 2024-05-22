@@ -1,12 +1,16 @@
-from random import random
+import itertools
+import logging
+
+import numpy as np
 import pandas as pd
 import sklearn
-import logging
-import numpy as np
 import sklearn.ensemble
 import sklearn.impute
+import streamlit as st
+
+from sklearn.experimental import enable_iterative_imputer #noqa
 from alphastats.utils import ignore_warning
-from sklearn.experimental import enable_iterative_imputer
+#from sklearn.experimental import enable_iterative_imputer
 import itertools
 from fancyimpute import KNN, NuclearNormMinimization, SoftImpute, BiScaler, IterativeSVD
 
@@ -30,45 +34,58 @@ class Preprocess:
         print(pd.DataFrame(self.preprocessing_info.items()))
 
     def _remove_na_values(self, cut_off):
+        if (
+            self.preprocessing_info.get("Missing values were removed")
+            and self.preprocessing_info.get("Data completeness cut-off") == cut_off
+        ):
+            logging.info("Missing values have already been filtered.")
+            st.warning(
+                "Missing values have already been filtered. To apply another cutoff, reset preprocessing."
+            )
+            return
         cut = 1 - cut_off
-        limit = self.mat.shape[0] * cut
-        
+
+        num_samples, num_proteins = self.mat.shape
+        limit = num_samples * cut
+
+        self.mat.replace(0, np.nan, inplace=True)
         keep_list = list()
         invalid = 0
         for column_name in self.mat.columns:
             column = self.mat[column_name]
-            # Get the count of Zeros in column 
-            count = (column == 0).sum()
+            count = column.isna().sum()
             try:
                 count = count.item()
                 if isinstance(count, int):
                     if count < limit:
                         keep_list += [column_name]
-                    
-            except ValueError:
-                invalid +=1
-                continue
-        
-        self.mat= self.mat[keep_list]
-        self.preprocessing_info.update(
-            {"Data completeness cut-off": cut_off}
-        )
-        percentage = cut_off * 100
-        print(f"Proteins with a data completeness across all samples of less than {percentage} % have been removed.")
 
+            except ValueError:
+                invalid += 1
+                continue
+        self.mat = self.mat[keep_list]
+
+        self.preprocessing_info.update(
+            {
+                "Number of removed ProteinGroups due to data completeness cutoff": num_proteins
+                - self.mat.shape[1],
+                "Missing values were removed": True,
+                "Data completeness cut-off": cut_off,
+            }
+        )
 
     def _filter(self):
         if len(self.filter_columns) == 0:
             logging.info("No columns to filter.")
             return
 
-        if self.preprocessing_info.get("Contaminations have been removed") == True:
+        if self.preprocessing_info.get("Contaminations have been removed"):
             logging.info("Contaminatons have already been filtered.")
             return
 
-        #  print column names with contamination
+        #print column names with contamination
         protein_groups_to_remove = self.rawinput[
-            (self.rawinput[self.filter_columns] == True).any(axis=1)
+            self.rawinput[self.filter_columns].any(axis=1)
         ][self.index_column].tolist()
 
         protein_groups_to_remove = list(
@@ -96,7 +113,7 @@ class Preprocess:
 
     @ignore_warning(RuntimeWarning)
     @ignore_warning(UserWarning)
-    def _imputation(self, method: str, threads: int):
+    def _imputation(self, method: str):
         # remove ProteinGroups with only NA before
         protein_group_na = self.mat.columns[self.mat.isna().all()].tolist()
 
@@ -105,43 +122,32 @@ class Preprocess:
             logging.info(
                 f" {len(protein_group_na)} Protein Groups were removed due to missing values."
             )
-
         logging.info("Imputing data...")
 
         if method == "mean":
-            imp = sklearn.impute.SimpleImputer(missing_values=np.nan, strategy="mean", keep_empty_features=True)
+            imp = sklearn.impute.SimpleImputer(
+                missing_values=np.nan, strategy="mean", keep_empty_features=True
+            )
             imputation_array = imp.fit_transform(self.mat.values)
 
         elif method == "median":
-            imp = sklearn.impute.SimpleImputer(missing_values=np.nan, strategy="median", keep_empty_features=True)
+            imp = sklearn.impute.SimpleImputer(
+                missing_values=np.nan, strategy="median", keep_empty_features=True
+            )
             imputation_array = imp.fit_transform(self.mat.values)
 
         elif method == "knn":
             # change for text
-            method = "k-Nearest Neighbor"
+            method = "k-Nearest Neighbor with 2 neighbors"
             imp = sklearn.impute.KNNImputer(n_neighbors=2, weights="uniform")
             imputation_array = imp.fit_transform(self.mat.values)
 
         elif method == "randomforest":
-            randomforest = sklearn.ensemble.RandomForestRegressor(
-                max_depth=10,
-                bootstrap=True,
-                max_samples=0.5,
-                n_jobs=threads,
-                random_state=0,
-                verbose=0,  #  random forest takes a while print progress
+            imp = sklearn.ensemble.HistGradientBoostingRegressor(
+                max_depth=10, max_iter=100, random_state=0
             )
-            imp = sklearn.impute.IterativeImputer(
-                random_state=0, estimator=randomforest
-            )
-
-            # the random forest imputer doesnt work with float32/float16..
-            #  so the values are multiplied and converted to integers
-            array_multi_mio = self.mat.values * 1000000
-            array_int = array_multi_mio.astype("int")
-
-            imputation_array = imp.fit_transform(array_int)
-            imputation_array = imputation_array / 1000000
+            imp = sklearn.impute.IterativeImputer(random_state=0, estimator=imp)
+            imputation_array = imp.fit_transform(self.mat.values)
 
         elif method == "svd":
             # change for tex
@@ -174,26 +180,43 @@ class Preprocess:
         )
         self.preprocessing_info.update({"Imputation": method})
 
+    def _linear_normalization(self, dataframe: pd.DataFrame):
+        """Normalize data using l2 norm without breaking when encoutering nones
+        l2 = sqrt(sum(x**2))
+
+        Args:
+            dataframe (pd.DataFrame): dataframe to normalize
+
+        Returns:
+            np.array: normalized np.array
+        """
+        square_sum_per_row = dataframe.pow(2).sum(axis=1, skipna=True)
+
+        l2_norms = np.sqrt(square_sum_per_row)
+        normalized_vals = dataframe.div(l2_norms.replace(0, 1), axis=0)
+        return normalized_vals.values
+
     @ignore_warning(UserWarning)
     @ignore_warning(RuntimeWarning)
     def _normalization(self, method: str):
-
         if method == "zscore":
             scaler = sklearn.preprocessing.StandardScaler()
-            normalized_array = scaler.fit_transform(self.mat.values)
+            normalized_array = scaler.fit_transform(
+                self.mat.values.transpose()
+            ).transpose()
 
         elif method == "quantile":
             qt = sklearn.preprocessing.QuantileTransformer(random_state=0)
-            normalized_array = qt.fit_transform(self.mat.values)
+            normalized_array = qt.fit_transform(self.mat.values.transpose()).transpose()
 
         elif method == "linear":
-            normalized_array = sklearn.preprocessing.normalize(
-                self.mat.values, norm="l2"
-            )
+            normalized_array = self._linear_normalization(self.mat)
 
         elif method == "vst":
-            scaler = sklearn.preprocessing.PowerTransformer(standardize=False)
-            normalized_array = scaler.fit_transform(self.mat.values)
+            minmax = sklearn.preprocessing.MinMaxScaler()
+            scaler = sklearn.preprocessing.PowerTransformer()
+            minmaxed_array = minmax.fit_transform(self.mat.values.transpose())
+            normalized_array = scaler.fit_transform(minmaxed_array).transpose()
 
         else:
             raise ValueError(
@@ -208,19 +231,19 @@ class Preprocess:
         self.preprocessing_info.update({"Normalization": method})
 
     def reset_preprocessing(self):
-        """ Reset all preprocessing steps
-        """
-        #  reset all preprocessing steps
+        """Reset all preprocessing steps"""
         self.create_matrix()
         print("All preprocessing steps are reset.")
-    
+
     @ignore_warning(RuntimeWarning)
     def _compare_preprocessing_modes(self, func, params_for_func) -> list:
         dataset = self
         imputation_methods = ["mean", "median", "knn", "knn3", "svd", "isvd"]
-        normalization_methods = ["vst","zscore", "quantile" ]
+        normalization_methods = ["vst","zscore", "quantile"]
         
-        preprocessing_modes = list(itertools.product(normalization_methods, imputation_methods))
+        preprocessing_modes = list(
+            itertools.product(normalization_methods, imputation_methods)
+        )
 
 
         results_list = []
@@ -231,7 +254,9 @@ class Preprocess:
         for preprocessing_mode in preprocessing_modes:
             # reset preprocessing
             dataset.reset_preprocessing()
-            print(f"Normalization {preprocessing_mode[0]}, Imputation {str(preprocessing_mode[1])}")
+            print(
+                f"Normalization {preprocessing_mode[0]}, Imputation {str(preprocessing_mode[1])}"
+            )
             dataset.mat.replace([np.inf, -np.inf], np.nan, inplace=True)
 
             dataset.preprocess(
@@ -242,7 +267,7 @@ class Preprocess:
 
             res = func(**params_for_func)
             results_list.append(res)
-        
+
             print("\t")
 
         return results_list
@@ -251,8 +276,8 @@ class Preprocess:
         self.mat = np.log2(self.mat + 0.1)
         self.preprocessing_info.update({"Log2-transformed": True})
         print("Data has been log2-transformed.")
-    
-    def batch_correction(self, batch:str):
+
+    def batch_correction(self, batch: str):
         """Correct for technical bias/batch effects
         Behdenna A, Haziza J, Azencot CA and Nordor A. (2020) pyComBat, a Python tool for batch effects correction in high-throughput molecular data using empirical Bayes methods. bioRxiv doi: 10.1101/2020.03.17.995431
         Args:
@@ -260,8 +285,11 @@ class Preprocess:
         """
         import combat
         from combat.pycombat import pycombat
+
         data = self.mat.transpose()
-        series_of_batches = self.metadata.set_index(self.sample).reindex(data.columns.to_list())[batch]
+        series_of_batches = self.metadata.set_index(self.sample).reindex(
+            data.columns.to_list()
+        )[batch]
         self.mat = pycombat(data=data, batch=series_of_batches).transpose()
 
     @ignore_warning(RuntimeWarning)
@@ -324,7 +352,7 @@ class Preprocess:
         """
         if remove_contaminations:
             self._filter()
-        
+
         if remove_samples is not None:
             self._remove_sampels(sample_list=remove_samples)
 
@@ -332,7 +360,7 @@ class Preprocess:
             self.mat = self._subset()
         
 
-        if data_completeness> 0:
+        if data_completeness > 0:
             self._remove_na_values(cut_off=data_completeness)
 
         if log2_transform and self.preprocessing_info.get("Log2-transformed") is False:
@@ -341,9 +369,14 @@ class Preprocess:
         if normalization is not None:
             self._normalization(method=normalization)
             self.mat = self.mat.replace([np.inf, -np.inf], np.nan)
-            
+
         if imputation is not None:
             self._imputation(method=imputation, threads=threads)
 
         self.mat = self.mat.loc[:, (self.mat != 0).any(axis=0)]
+        self.preprocessing_info.update(
+            {
+                "Matrix: Number of ProteinIDs/ProteinGroups": self.mat.shape[1],
+            }
+        )
         self.preprocessed = True
