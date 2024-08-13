@@ -68,7 +68,7 @@ Further we provide a Dockerimage for the GUI.
 AlphaStats can be installed in an existing Python 3.8/3.9/3.10 environment with a single `bash` command. 
 
 ```bash
-pip install alphastats
+pip install git+https://github.com/alexpmagalhaes/alphapeptstats_dev.git
 ```
 
 In case you want to use the Graphical User Interface, use following command in the command line:
@@ -81,7 +81,7 @@ AlphaStats can be imported as a Python package into any Python script or noteboo
 A brief [Jupyter notebook tutorial](nbs/getting_started.ipynb) on how to use the API is also present in the [nbs folder](nbs).
 
 
-### One Click Installer
+### One Click Installer (not available)
 
 One click Installer for MacOS, Windows and Linux can be found [here](https://github.com/MannLabs/alphapeptstats/releases).
 
